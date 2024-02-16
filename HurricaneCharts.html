@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hurricanes avec Google Charts</title>
+    <script type="text/javascript" src="https://www.gstatic.com/charts/loader.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.0.min.js"></script>
+</head>
+<style>
+    .color-checkbox {
+        display: none;
+    }
+    
+    .color-box {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        margin-right: 5px;
+        border: 1px solid #000;
+        cursor: pointer;
+    }
+    
+    .tropical-storms-color {
+        background-color: blue;
+    }
+    
+    .cat1-2-color {
+        background-color: orange;
+    }
+    
+    .cat3-5-color {
+        background-color: red;
+    }
+</style>
+
+<body>
+    <div id="dashboard_div" style="width: 900px; height: auto;"></div>
+ 
+    <div id="graphContainer" style="width: 900px; height: 500px;"></div>
+    <div>
+        <input type="radio" id="bars" name="graphType" value="bars" checked><label for="bars">Bâtonnets</label>
+        <input type="radio" id="regions" name="graphType" value="regions"><label for="regions">Régions</label>
+        <input type="radio" id="curves" name="graphType" value="curves"><label for="curves">Courbes</label>
+    </div>  
+    <div>
+        <input type="checkbox" id="tropicalStorms" class="color-checkbox" checked>
+        <label for="tropicalStorms"><span class="color-box tropical-storms-color"></span>Tempêtes tropical</label>
+    </div>
+    <div>
+        <input type="checkbox" id="cat1-2" class="color-checkbox" checked>
+        <label for="cat1-2"><span class="color-box cat1-2-color"></span>Ouragans cat 1-2</label>
+    </div>
+    <div>
+        <input type="checkbox" id="cat3-5" class="color-checkbox" checked>
+        <label for="cat3-5"><span class="color-box cat3-5-color"></span>Ouragans cat 3-50</label>
+    </div>
+    <div id="filter_div" style="width: 900px; height: 50px;"></div>
+
+    <script>
+        google.charts.load('current', { 'packages': ['corechart', 'controls'] });
+        google.charts.setOnLoadCallback(drawChart);
+    
+        $('input[type=radio][name=graphType]').change(function () {
+            drawChart();
+        });
+        $('input[type=checkbox]').change(function () {
+    drawChart();
+});
+        async function drawChart() {
+            const data = await GetHurricanesData();
+            const dashboard = new google.visualization.Dashboard(document.getElementById('dashboard_div'));
+            const view = new google.visualization.DataView(data);
+    
+            let columnsToDisplay = [0];
+            if ($('#tropicalStorms').is(':checked')) columnsToDisplay.push(2);
+            if ($('#cat1-2').is(':checked')) columnsToDisplay.push(3);
+            if ($('#cat3-5').is(':checked')) columnsToDisplay.push(4);
+            view.setColumns(columnsToDisplay);
+    
+            const slider = new google.visualization.ControlWrapper({
+                'controlType': 'NumberRangeFilter',
+                'containerId': 'filter_div',
+                'options': {
+                    'filterColumnLabel': 'Année',
+                    'ui': {
+                        'labelStacking': 'vertical',
+                        'label': 'Range de l\'année:',
+                        'format': { 
+                            'pattern': '####'
+                        }
+                    }
+                }
+            });
+    
+            const chart = new google.visualization.ChartWrapper({
+                'chartType': 'ComboChart',
+                'containerId': 'graphContainer',
+                'options': {
+                    'title': 'Historique des tempêtes de l\'Atlantique',
+                    'hAxis': { 'title': 'Année', 'format': '####' },
+                    'vAxis': { 'title': 'Nombre', 'viewWindow': { 'min': 0 } },
+                    'seriesType': 'bars',
+                    'tooltip': { isHtml: true },
+                    'bar': { 'groupWidth': '75%' }
+                },
+                'view': { 'columns': columnsToDisplay } 
+            });
+    
+            const graphType = $('input[type=radio][name=graphType]:checked').val();
+            if (graphType === 'regions') {
+                chart.setOption('seriesType', 'area');
+            } else if (graphType === 'curves') {
+                chart.setOption('seriesType', 'line');
+                chart.setOption('curveType', 'function');
+            }
+    
+            dashboard.bind(slider, chart);
+            dashboard.draw(data);
+        }
+        async function GetHurricanesData() {
+            return new Promise(resolve => {
+                $.ajax({
+                    url: 'https://api-server-2.glitch.me/api/hurricanes', 
+                    type: 'GET',
+                    success: function (apiData) {
+                        const dataTable = new google.visualization.DataTable();
+                        dataTable.addColumn('number', 'Année'); 
+                        dataTable.addColumn({type: 'string', role: 'tooltip'});
+
+                        dataTable.addColumn('number', 'Tempêtes tropical');
+                        dataTable.addColumn('number', 'Ouragans cat 1-2');
+                        dataTable.addColumn('number', 'Ouragans cat 3-5');
+    
+                        apiData.forEach(item => {
+                            const yearString = item.Year.toString();
+
+                            dataTable.addRow([
+                        item.Year, 
+                                                yearString, 
+                        item.Storm,
+                        item.Cat1 + item.Cat2,
+                        item.Cat3 + item.Cat4 + item.Cat5
+                    ]);
+                });
+                        resolve(dataTable);
+                    },
+                    error: function (xhr) {
+                        console.error('Erreur lors de la récupération des données', xhr);
+                        resolve(null);
+                    }
+                });
+            });
+        }
+    </script>
+    
+</body>
+
+</html>
